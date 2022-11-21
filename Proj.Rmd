@@ -1,0 +1,945 @@
+---
+title: "Milestone1"
+author: "Akanksha Sharma"
+date: "2022-10-14"
+output: html_document
+---
+##Import Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(nycflights13)
+library(ggpubr)
+library(lubridate)
+library(kableExtra)
+library(Hmisc)
+
+```
+
+Let's try to understand more about the data:<BR>
+
+Filter out the data based on the United Airlines carrier<BR>
+```{r}
+UA_flight = flights %>% 
+  filter(carrier == 'UA')
+```
+We are going to use UA_flight data for further analysis of this project. <BR>
+How many rows are there for the United Airlines ?<BR>
+```{r}
+print(paste('Size of dataset for the United Airlines', nrow(UA_flight)))
+```
+What are the type of variables?<BR>
+```{r}
+glimpse(UA_flight)
+```
+With this we can see the different type of variables in the dataset.<BR>
+Data type of the variables which are in scope : <BR>
+  1. Time of year : time_hour dttm format<BR>
+  2. Temperature : temp (Stored in weather dataset)<BR>
+  3. Wind Speed : wind_speed (Stored in weather dataset)<BR>
+  4. Precipitation : precip (Stored in weather dataset)<BR>
+  5. Visibility : visib (Stored in miles)<BR>
+
+We need to join the dataset UA_flight  with the Weather dataset.<BR>
+
+```{r}
+glimpse(weather)
+```
+```{r}
+UA_flight_weather = UA_flight %>%
+  inner_join(weather, by = c('year','month','day','hour','origin'))
+glimpse(UA_flight_weather)
+```
+Please take a note that the late and very_late variable have been added.<BR>
+
+#Let's analyse the departure delay for the UA carrier flight <BR>
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_weather , aes(x= dep_delay ))+
+  geom_bar(color = 'black') +
+  labs(x = "Departure Delay in minutes", title = "Distribution of Departure Delay")
+```
+Departure delay is following the log normal distribution<BR>
+
+```{r}
+summary(UA_flight_weather$dep_delay)
+```
+
+```{r}
+cat('Number of flights for which the departure delay is missing' , sum(is.na(UA_flight_weather$dep_delay)),'\n')
+cat('Percentage of missing data for departure delays for the UA carrier' ,sum((is.na(UA_flight_weather$dep_delay))/nrow(UA_flight_weather))*100,'\n')
+perct <- c(sum(is.na(UA_flight_weather$dep_delay)),sum((is.na(UA_flight_weather$dep_delay))/nrow(UA_flight_weather))*100)
+perct
+tab <- matrix(c(sum(is.na(UA_flight_weather$dep_delay)),sum((is.na(UA_flight_weather$dep_delay))/nrow(UA_flight_weather))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+tab %>%
+  kbl() %>%
+ kable_paper("hover", full_width = F)
+```
+```{r}
+# Impute missing values with mean in departure delay column 
+UA_flight_weather$dep_delay <- with(UA_flight_weather, impute(dep_delay, mean))
+```
+ 
+
+## Add Late and Very_late variable in the dataset<BR>
+```{r}
+#Add late and Very Late columns in the dataset
+UA_flight_weather <- UA_flight_weather %>%
+  mutate(late = case_when(dep_delay > 0 ~ TRUE,
+                          dep_delay <=0 ~ FALSE ),
+         very_late = case_when(dep_delay > 30 ~ TRUE,
+                          dep_delay <= 30 ~ FALSE ))
+glimpse(UA_flight_weather)
+```
+
+
+
+# Let's analyze the Late variable<BR>
+Let's see how many flights were late<BR>
+```{r}
+
+# Create contigency table
+flight_delay_late= table(UA_flight_weather$late)
+# Create bar plot
+ggplot(data = UA_flight_weather , aes(x= late))+
+  geom_bar(color = 'green') +
+  ggtitle('Departure Delay')
+cat('%age of delayed flights',(flight_delay_late[2]/nrow(UA_flight_weather))*100)
+```
+
+# Let's analyze the Very late variable<BR>
+Let's see how many flights were very late<BR>
+```{r}
+
+# Create contigency table
+flight_delay_very_late= table(UA_flight_weather$very_late)
+# Create bar plot
+ggplot(data = UA_flight_weather , aes(x= very_late))+
+  geom_bar(color = 'green') +
+  ggtitle('Departure Delay')
+cat('%age of delayed flights',(flight_delay_very_late[2]/nrow(UA_flight_weather))*100)
+```
+Only 14.12 % flights were very_late. We need to focus more on the flights which were very late.<BR>
+
+
+# Time of day <BR>
+Let's analyze the time of the day variable with the departure delay<BR>
+```{r}
+ggplot(UA_flight_weather, aes(x= hour))+
+  geom_bar()+
+  labs(x = "Time of the Day", title = "Distribution of Departure Delay",y = "Flight Count")
+
+```
+We can see the number of flights for each hour and the busiest time for the UA flights is 6 AM.
+
+We can see that there's no flight which is operated during midnight to 5 o'clock. <BR>
+Let's see if there's any relation between the time of hour of the flight with the delay.<BR>
+
+```{r}
+hour_summary <- UA_flight_weather %>%
+ group_by(hour) %>% 
+  summarise(
+    mean_hour = mean(dep_delay),
+    sd_hour = sd(dep_delay),
+    median_hour = median(dep_delay),
+    count_hour = n()
+  )
+hour_summary
+```
+
+
+
+```{r}
+par(mfrow=c(1,3))
+plot(x = hour_summary$hour,y = hour_summary$mean_hour,type = 'b',xlab = 'Hour',ylab= 'Mean of delay')
+plot(x = hour_summary$hour,y = hour_summary$sd_hour,type = 'b',xlab = 'Hour',ylab= 'Standard Deviation of delay') 
+plot(x = hour_summary$hour,y = hour_summary$median_hour,type = 'b',xlab = 'Hour',ylab= 'Median of delay') 
+
+```
+We can see that the delay keep on increasing as we progress over each hour. But we will closely look at the data points for 23 hour. We can see that there are only 9 records for that flight. Hence, we can't conclude much . Because there are two flights which are having departure dealy of 66 and 80 minutes. It might be the case these are the same flights which got delayed during the day time hence,there's delay for the connecting flights.
+
+We can make a comparison with each hour of the flight and see how it's impacting the delay. <BR>
+Busiest time for the UA carrier airlines : <BR>
+```{r}
+UA_flight_weather %>%
+  filter(UA_flight_weather$hour==23)
+```
+
+# Let's do the analysis based for hour based on late variable<BR>
+```{r}
+hour_summary <- UA_flight_weather %>%
+ group_by(hour,late) %>% 
+  summarise(
+    count_hour = n()
+  )
+hour_summary
+ggplot(hour_summary,aes(hour,count_hour,fill = late))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Count of flight which were late or on time')
+```
+
+
+```{r}
+hour_summary <- UA_flight_weather %>%
+ group_by(hour,very_late) %>% 
+  summarise(
+    count_hour = n()
+  )
+hour_summary
+ggplot(hour_summary,aes(hour,count_hour,fill = very_late))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Count of flight which were late or on time')
+```
+
+```{r}
+hour_summary <- UA_flight_weather %>%
+ group_by(hour,origin) %>% 
+  summarise(
+    mean_hour_origin = mean(dep_delay),
+    sd_hour_origin = sd(dep_delay),
+    median_hour_origin = median(dep_delay),
+    count_hour_origin = n()
+  )
+hour_summary
+
+```
+
+```{r}
+ggplot(hour_summary,aes(hour,count_hour_origin,fill = origin))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Count of flight which were late or on time')
+```
+EWR delay based on time
+```{r}
+hour_summary_EWR <- hour_summary %>%
+                filter(origin == 'EWR')
+
+par(mfrow=c(1,3))
+plot(x = hour_summary_EWR$hour,y = hour_summary_EWR$mean_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Mean of delay') 
+plot(x = hour_summary_EWR$hour,y = hour_summary_EWR$sd_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Standar Deviation of delay') 
+plot(x = hour_summary_EWR$hour,y = hour_summary_EWR$median_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Medain  of delay') 
+
+```
+
+JFK delay based on time
+```{r}
+hour_summary_JFK <- hour_summary %>%
+                filter(origin == 'JFK')
+
+par(mfrow=c(1,3))
+plot(x = hour_summary_JFK$hour,y = hour_summary_JFK$mean_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Mean of delay') 
+plot(x = hour_summary_JFK$hour,y = hour_summary_JFK$sd_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Standard Deviation of delay') 
+plot(x = hour_summary_JFK$hour,y = hour_summary_JFK$median_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Median of delay') 
+```
+```{r}
+hour_summary_LGA <- hour_summary %>%
+                filter(origin == 'LGA')
+
+par(mfrow=c(1,3))
+plot(x = hour_summary_LGA$hour,y = hour_summary_LGA$mean_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Mean of delay') 
+plot(x = hour_summary_LGA$hour,y = hour_summary_LGA$sd_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Standard Deviation of delay') 
+plot(x = hour_summary_LGA$hour,y = hour_summary_LGA$median_hour_origin,type = 'b',xlab = 'Hour',ylab= 'Median of delay') 
+```
+```{r}
+total = nrow(UA_flight_weather)
+total
+```
+
+```{r}
+#Find percentage share of each flight
+cat('Number of flights for each flight originating from the New York airports')
+flight_percentage_origin <- UA_flight_weather %>%
+  group_by(origin)  %>% 
+  summarise(
+    mean_origin = mean(dep_delay),
+    sd_origin = sd(dep_delay),
+    median_origin = median(dep_delay),
+    count_origin = n(),
+    per_origin = (n()/total)*100
+  )
+flight_percentage_origin
+
+```
+
+```{r}
+#Add late and Very Late columns in the dataset
+UA_flight_weather <- UA_flight_weather %>%
+  mutate(day_segment = case_when(hour < 11 ~ 'morning',
+                         hour >= 11 & hour < 16 ~ 'afternoon', 
+                         hour >=16 & hour < 20 ~ 'evening',
+                         hour >= 20 ~ 'night' )
+         )
+glimpse(UA_flight_weather)
+```
+```{r}
+# number of simulations
+N <- 10^4-1
+# vector to store the simulations
+result <- numeric(N)
+# vector to store the time of the day
+vectorDay = c("morning", "afternoon", "evening", "night")
+# loop through the time of the day and do permutation testing
+#calculate and store the observed difference in the sample
+for(i in 1:length(vectorDay))
+{
+  for(j in 1:length(vectorDay)){
+    if(j < 4 & i <= j){
+      column1 = (vectorDay[i])
+      column2 = (vectorDay[j+1])
+      #anlyse the data based on column1 and column2
+      reduced_flights <- UA_flight_weather %>%
+      filter(day_segment==column1 | day_segment==column2)
+      # observations in our sample
+      sample.size = nrow(reduced_flights)
+      # observations in one of the group
+      group.1.size = nrow(reduced_flights[reduced_flights$day_segment==column1,])
+      #calculate the observed value
+      observed <- mean(reduced_flights$dep_delay[reduced_flights$day_segment ==column1])-
+      mean(reduced_flights$dep_delay[reduced_flights$day_segment == column2])
+      
+      for(k in 1:N)
+      {
+        index = sample(sample.size, size=group.1.size, replace = FALSE)
+        result[k] = mean(reduced_flights$dep_delay[index])-
+        mean(reduced_flights$dep_delay[-index])
+      }
+      #print the histograms
+      print(ggplot(data=tibble(result), mapping = aes(x=result)) + geom_histogram(bins = 30) + geom_vline(xintercept = observed, color = "red")) 
+      #Calculate the p-value
+      if(observed > 0)
+      {
+        cat("The permutation for ", column1, " vs ", column2, ": ")
+        print(p_value <- 2 * (sum(result >= observed) + 1) / (N + 1))
+      }
+      else{
+        cat("The permutation for ", column1, " vs ", column2, ": ")
+        print(p_value <- 2 * (sum(result <= observed) + 1) / (N + 1))
+        }
+      }
+  }
+}
+```
+
+
+
+```{r}
+ggplot(data= UA_flight_weather , aes(x = dep_delay, y = day_segment)) + 
+  geom_boxplot() +
+  theme_bw() +
+  labs(x = 'Departure Delay', title = 'Box plot based on the day',y='Time of the day')
+```
+
+
+
+```{r}
+sum(is.na(UA_flight_weather$day))
+```
+```{r}
+#Add late and Very Late columns in the dataset
+UA_flight_weather <- UA_flight_weather %>%
+  mutate(month_segment = case_when(month >= 9 & month <= 11 ~ 'Fall',
+                         month >= 3 & month <= 5 ~ 'Spring', 
+                         month >= 6 & month <= 8 ~ 'Summer',
+                         month > 11 | month <3 ~ 'Winter')
+         )
+glimpse(UA_flight_weather)
+```
+```{r}
+ggplot(data= UA_flight_weather , aes(x = dep_delay, y = month_segment)) + 
+  geom_boxplot() +
+  theme_bw() +
+  labs(x = 'Departure Delay', title = 'Box plot based on season of Year',y='Seasons')
+```
+```{r}
+# Create bar plot
+ggplot(data = UA_flight_weather , aes(x= month_segment))+
+  geom_bar(color = 'green') +
+  ggtitle('Number of flighes based on Season')
+```
+
+```{r}
+#N = number of simulations we will use
+N <- 10^4-1
+#create a blank vector to store the simulation results
+result <- numeric(N)
+#vector of the types of a day
+vectorSeason = c("Fall", "Winter", "Spring", "Summer")
+#loop through the types of a day and choose every time two of those
+#calculate and store the observed difference in the sample
+for(i in 1:length(vectorSeason))
+{
+  for(j in 1:length(vectorSeason)){
+    if(j < 4 & i <= j){
+      column1 = (vectorSeason[i])
+    column2 = (vectorSeason[j+1])
+    #reduce the data set to selected two seasons of a year
+    reduced_flights <- UA_flight_weather %>%
+    filter(month_segment==column1 | month_segment==column2)
+    #sample.size = the number of observations in our sample
+    sample.size = nrow(reduced_flights)
+    #group.1.size = the number of observations in the first group
+    group.1.size = nrow(reduced_flights[reduced_flights$month_segment==column1,])
+    #calculate the observed value
+    observed <- mean(reduced_flights$dep_delay[reduced_flights$month_segment ==column1])-
+    mean(reduced_flights$dep_delay[reduced_flights$month_segment == column2])
+    
+    for(k in 1:N)
+    {
+      index = sample(sample.size, size=group.1.size, replace = FALSE)
+      result[k] = mean(reduced_flights$dep_delay[index])-
+      mean(reduced_flights$dep_delay[-index])
+    }
+    
+    print(ggplot(data=tibble(result), mapping = aes(x=result)) + geom_histogram(bins = 30) + geom_vline(xintercept = observed, color = "red")) 
+    
+    if(observed > 0)
+      {
+        cat("The permutation for ", column1, " vs ", column2, ": ")
+        print(p_value <- 2 * (sum(result >= observed) + 1) / (N + 1))
+      }
+    else{
+      cat("The permutation for ", column1, " vs ", column2, ": ")
+      print(p_value <- 2 * (sum(result <= observed) + 1) / (N + 1))
+    }
+    }
+}}
+```
+
+
+
+
+
+
+
+
+#Let's analyze the temperature variable
+```{r}
+summary(UA_flight_weather$temp)
+```
+Note : Temperature is in Fahrenheit
+Minimum temperature : 10.94
+Maximum temperature : 100.04
+
+```{r}
+
+cat('Number of records where temperature value is missing' , sum(is.na(UA_flight_weather$temp)),'\n')
+cat('Percentage of missing data for temperature for the UA carrier' ,sum((is.na(UA_flight_weather$temp))/nrow(UA_flight_weather))*100,'\n')
+
+tab <- matrix(c(sum(is.na(UA_flight_weather$temp)),sum((is.na(UA_flight_weather$temp))/nrow(UA_flight_weather))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+```
+```{r}
+# Impute missing values with mean in temperature  column 
+UA_flight_weather$temp <- with(UA_flight_weather, impute(temp, mean))
+```
+
+
+
+
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = temp)) +
+  geom_histogram()+
+  labs(title = 'Histogram of Temperature',x = 'Temperature' , y = 'Count')
+```
+Let's check if the temperature in the dataset follows a Normal distribution
+
+```{r}
+#Create a q-q plot between the difference
+qqnorm(UA_flight_weather$temp)
+qqline(UA_flight_weather$temp)
+```
+The temperature follows a Normal Distribution.
+
+
+
+
+# Let's analyse the departure delay based on the temperature:
+Data type of temperature variable: double
+Data type of departure delay : double
+
+```{r}
+ggplot(data = UA_flight_weather , aes( x = temp , y = dep_delay))+
+  geom_point()
+```
+We can't conclude much from this graph. 
+
+
+It's interesting to know which to compare the temperature for the flights which have dep_delay > 0
+Note: We have already filtered the data based on the dep_delay and that variable in our dataset is called as Late.
+
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = temp,color = late)) +
+  geom_histogram(fill="white", alpha=0.5, position="identity")+
+  labs(title = 'Histogram of Temperature for the Delayed and Non delayed flights',x = 'Temperature' , y = 'Number of flights')
+```
+Temperature for both the late and non delay flight is following the same distribution. Both the graphs are following overlapping. 
+
+```{r}
+ggplot(data= subset(UA_flight_weather, !is.na(late)) , aes(x = temp, y = late)) + 
+  geom_boxplot( alpha=0.3) +
+  labs(title = 'Boxplot of Temperature for the Delayed and Non delayed flights',x = 'Temperature' , y = 'Number of flights')
+```
+By seeing the box plot of two graphs we can see that there's not much difference between the  Flights which were delayed and which were on time based on the temperature variable.
+
+Both the box plots are overlapping. We can conduct a permutation test and see if there's any relationship.
+
+<B>Question : Is the mean of temperature of flights for Delayed and Non - Delayed is equal or not?</B>
+
+H0 : Mean(Temp of flights which were delayed) = Mean(Temp of flights which were on time)
+H1 : Mean(Temp of flights which were delayed) != Mean(Temp of flights which were on time)
+
+Let's do a permutation test and compare the mean values between both the values.
+
+```{r}
+#Find the observed difference between flight delays
+observed_diff = mean(UA_flight_weather$temp[UA_flight_weather$late == TRUE]) -      mean(UA_flight_weather$temp[UA_flight_weather$late == FALSE])      
+print(observed_diff)
+# Number of simulation we will use
+N <- 10^4-1
+#sample.size = the number of observations in our sample
+sample.size = nrow(UA_flight_weather)
+#group.1.size = the number of observations in the first group : Flights were delayed
+group.1.size = length(UA_flight_weather$late[UA_flight_weather$late == TRUE])
+print(group.1.size)
+#create a blank vector to store the simulation results
+result <- numeric(N)
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "TRUE" group, indexes not sample as "FALSE"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in 
+  #median rainfall between the index and non-index groups
+  result[i] = mean(UA_flight_weather$temp[index]) - mean(UA_flight_weather$temp[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) + 
+  geom_histogram(breaks=seq(-300,300,by=25)) +
+  geom_vline(xintercept = observed_diff, color = "red") +
+  ggtitle('Distribution of test statistic for 10^4 simulations')
+
+#Calculate the p-value
+p_value <- 2*(sum(result >= observed_diff) + 1) / (N + 1)
+p_value
+```
+
+Observations from the permutation test:
+1. The p-value is very small. It means that we can reject our null hypothesis. That is the mean of both the flights which were delayed and on-time is not equal. There's a evidence that the alternate hypothesis can be true. We meed to investigate more about it.
+
+It means that there's a possibility that the mean temperature will be different for the flight which were delayed and which were on time. 
+
+
+Let's try to compare the variance of both the variables. 
+
+Question : Is the variance of temperature of flights for delayed and non delayed flights is equal or not?
+
+H0 : var(Temp of flights which were delayed) = var(Temp of flights which were on time)
+H1 : var(Temp of flights which were delayed) != var(Temp of flights which were on time)
+
+Let's do a permutation test and compare the variance values between both the values.
+```{r}
+#Find the observed difference between flight delays
+observed_diff = var(UA_flight_weather$temp[UA_flight_weather$late == TRUE]) -      var(UA_flight_weather$temp[UA_flight_weather$late == FALSE])      
+print(observed_diff)
+# Number of simulation we will use
+N <- 10^4-1
+#sample.size = the number of observations in our sample
+sample.size = nrow(UA_flight_weather)
+#group.1.size = the number of observations in the first group : Flights were delayed
+group.1.size = length(UA_flight_weather$late[UA_flight_weather$late == TRUE])
+print(group.1.size)
+#create a blank vector to store the simulation results
+result <- numeric(N)
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "TRUE" group, indexes not sample as "FALSE"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in 
+  #median rainfall between the index and non-index groups
+  result[i] = var(UA_flight_weather$temp[index]) - var(UA_flight_weather$temp[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) + 
+  geom_histogram(breaks=seq(-300,300,by=25)) +
+  geom_vline(xintercept = observed_diff, color = "red") +
+  ggtitle('Distribution of test statistic for 10^4 simulations')
+
+#Calculate the p-value
+p_value <- 2*(sum(result >= observed_diff) + 1) / (N + 1)
+p_value
+```
+
+Observations from the permutation test:
+The p-value for the two sided permutation is very small. This indicates that the value of observed variance difference, under the null hypothesis is more likely a chance. We can reject our null hypothesis and hence there's a evidence that variance delay for both the late and flights on time  might be different.
+
+# Very Late and temperature
+
+Let's try to visualize the very_late with the temperature and see if there's any trend.
+
+
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = temp,color = very_late)) +
+  geom_histogram(fill="white", alpha=0.5, position="identity")
+```
+The temperature follows the same trend for both the flights which were on-time or very late between the flights.
+
+```{r}
+ggplot(data= UA_flight_weather , aes(x = temp, y = very_late)) + 
+ 
+  geom_boxplot( alpha=0.3) +
+  labs(title = 'Boxplot of Temperature for the Very late flights',x = 'Temperature' , y = 'Number of flights')
+
+```
+We can see that there's difference between the temperature mean values for the flights which were very late and almost on time. 
+
+
+Question : Is the mean of temperature of flights for True/False for very_late is equal or not?
+
+H0 : Mean(Temp of flights which were delayed (very late)) = Mean(Temp of flights which were on time and not delayed by 30 mins (very late))
+H1 : Mean(Temp of flights which were delayed (very late)) != Mean(Temp of flights which were on time and not delayed by 30 mins (very late))
+
+Let's do a permutation test and compare the mean values between both the values.
+
+```{r}
+#Find the observed difference between flight delays
+observed_diff = mean(UA_flight_weather$temp[UA_flight_weather$very_late == TRUE]) -      mean(UA_flight_weather$temp[UA_flight_weather$very_late == FALSE])      
+print(observed_diff)
+# Number of simulation we will use
+N <- 10^4-1
+#sample.size = the number of observations in our sample
+sample.size = nrow(UA_flight_weather)
+#group.1.size = the number of observations in the first group : Flights were delayed
+group.1.size = length(UA_flight_weather$very_late[UA_flight_weather$very_late == TRUE])
+print(group.1.size)
+#create a blank vector to store the simulation results
+result <- numeric(N)
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "TRUE" group, indexes not sample as "FALSE"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in 
+  #median rainfall between the index and non-index groups
+  result[i] = mean(UA_flight_weather$temp[index]) - mean(UA_flight_weather$temp[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) + 
+  geom_histogram(breaks=seq(-300,300,by=25)) +
+  geom_vline(xintercept = observed_diff, color = "red") +
+  ggtitle('Distribution of test statistic for 10^4 simulations')
+
+#Calculate the p-value
+p_value <- 2*(sum(result >= observed_diff) + 1) / (N + 1)
+p_value
+```
+
+Observations from the permutation test:
+1. The p-value is very small. It means that we can reject our null hypothesis. There's a evidence that the alternate hypothesis can be true. We meed to investigate more about it.
+
+
+Let's try to compare the variance of both the variables. 
+
+Question : Is the variance of temperature of flights  of True/False is equal or not?
+
+H0 : Var(Temp of flights which were delayed (very late)) = Var(Temp of flights which were on time and not delayed by 30 mins (very late))
+H1 : Var(Temp of flights which were delayed (very late)) = Var(Temp of flights which were on time and not delayed by 30 mins (very late))
+
+Let's do a permutation test and compare the variance values between both the values.
+```{r}
+#Find the observed difference between flight delays
+observed_diff = var(UA_flight_weather$temp[UA_flight_weather$very_late == TRUE]) -      var(UA_flight_weather$temp[UA_flight_weather$very_late == FALSE])      
+print(observed_diff)
+# Number of simulation we will use
+N <- 10^4-1
+#sample.size = the number of observations in our sample
+sample.size = nrow(UA_flight_weather)
+#group.1.size = the number of observations in the first group : Flights were delayed
+group.1.size = length(UA_flight_weather$very_late[UA_flight_weather$very_late == TRUE])
+print(group.1.size)
+#create a blank vector to store the simulation results
+result <- numeric(N)
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "TRUE" group, indexes not sample as "FALSE"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in 
+  #median rainfall between the index and non-index groups
+  result[i] = var(UA_flight_weather$temp[index]) - var(UA_flight_weather$temp[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) + 
+  geom_histogram(breaks=seq(-300,300,by=25)) +
+  geom_vline(xintercept = observed_diff, color = "red") +
+  ggtitle('Distribution of test statistic for 10^4 simulations')
+
+#Calculate the p-value
+p_value <- 2*(sum(result >= observed_diff) + 1) / (N + 1)
+p_value
+```
+
+Observations from the permutation test:
+The p-value for the two sided permutation is very small. This indicates that the value of observed variance difference, under the null hypothesis is more likely a chance. We can reject our null hypothesis and hence there's a evidence that mean delay of both the carriers might be different.
+It means that there's a chance that both the variance are different.
+
+```{r}
+
+quantile(UA_flight_weather$temp,probs=c(.025,.975))
+```
+24.98 and 89.06 are the 95% confidence value for the dataset. Based on these values we can find the extreme temperatures and see if there are any flights which are delayed or non delayed
+
+```{r}
+extreme_temp <- UA_flight_weather %>%
+  filter(UA_flight_weather$temp > 89.06 | UA_flight_weather$temp < 24.98)
+```
+Extreme temperature data 
+
+```{r}
+ggplot(data= extreme_temp , aes(x = temp, y = very_late)) + 
+  geom_boxplot() +
+  theme_bw()
+```
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = temp,color = very_late)) +
+  geom_histogram(fill="white", alpha=0.5, position="identity")+
+  labs(title = 'Histogram of Temperature for the Very late flights',x = 'Temperature' , y = 'Number of flights')
+```
+No, extreme temperatures does not impact the flight delays. 
+
+
+
+```{r}
+#print out the mean temperature of UA flights for the very late group
+mean(UA_flight_weather$temp[UA_flight_weather$very_late==TRUE])
+
+#print out the mean teperature of UA flights for the not very late group
+mean(UA_flight_weather$temp[UA_flight_weather$very_late==FALSE])
+
+#calculate and store the observed difference between the mean of temperature in the very late group and that in the not very late group
+observed.temp <- mean(UA_flight_weather$temp[UA_flight_weather$very_late==TRUE]) - mean(UA_flight_weather$temp[UA_flight_weather$very_late==FALSE])
+observed.temp
+
+#set N to be 10^4-1, this is large enough to keep results stable from run to run
+N <- 10^4-1
+#calculate and store the sample size, which is the number of observations in the very late group and that in the not very late group
+sample.size.temp = nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,]) + nrow(UA_flight_weather[UA_flight_weather$very_late==FALSE,])
+#find and store the sample size for the very late group
+group.1.size.temp <- nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,])
+#initialize the vector that stores the N many results
+result.temp <- numeric(N)
+#create the for loop
+for(i in 1:N)
+{
+#sample group.1.size many numbers from sample.size.distance numbers without replacement
+index.temp = sample(sample.size.temp,size=group.1.size.temp, replace = FALSE)
+#sampled indexes are taken as the indexes for very late group, and the rest are for not very late group
+#calculate and store the difference between the mean of new groups
+result.temp[i] = mean(UA_flight_weather$temp[index.temp]) -
+mean(UA_flight_weather$temp[-index.temp])
+}
+#create the histogram of the means as well as a verticle line that respresent the observed mean
+ggplot(data=tibble(result.temp), mapping = aes(x=result.temp)) +
+geom_histogram(bins = 20) +
+geom_vline(xintercept = observed.temp, color = "red") +
+labs(title = "Histogram of Permutation Test", x = "Difference in Average
+Temperature (Farenheit)", y = "Count")
+
+```
+
+
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = wind_speed)) +
+  geom_histogram()+
+  labs(title = 'Histogram of Wind Speed',x = 'Wind Speed' , y = 'Count')
+```
+```{r}
+#print out the mean wind speed of UA flights for the very late group
+mean(UA_flight_weather$wind_speed[UA_flight_weather$very_late==TRUE],na.rm=TRUE)
+
+#print out the mean wind speed of UA flights for the not very late group
+mean(UA_flight_weather$wind_speed[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+
+#calculate and store the observed difference between the mean of wind speed in the very late group and that in the not very late group
+observed.wind_speed <- mean(UA_flight_weather$wind_speed[UA_flight_weather$very_late==TRUE],na.rm=TRUE) -
+mean(UA_flight_weather$wind_speed[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+observed.wind_speed
+
+
+N <- 10^4-1
+#calculate and store the sample size, which is the number of observations in the very late group and that in the not very late group
+sample.size.wind_speed = nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,]) +
+nrow(UA_flight_weather[UA_flight_weather$very_late==FALSE,])
+#find and store the sample size for the very late group
+group.1.size.wind_speed <- nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,])
+#initialize the vector that stores the N many results
+result.wind_speed <- numeric(N)
+#create the for loop
+for(i in 1:N)
+{
+#sample group.1.size many numbers from sample.size.distance numbers without replacement
+index.temp = sample(sample.size.temp,size=group.1.size.temp, replace = FALSE)
+#sampled indexes are taken as the indexes for very late group, and the rest are for not very late group
+#calculate and store the difference between the mean of new groups
+result.temp[i] = mean(UA_flight_weather$temp[index.temp],na.rm=TRUE) -
+mean(UA_flight_weather$wind_speed[-index.temp],na.rm=TRUE)
+}
+#create the histogram of the means as well as a verticle line that respresent the observed mean
+ggplot(data=tibble(result.wind_speed), mapping = aes(x=result.temp)) +
+geom_histogram(bins = 20) +
+geom_vline(xintercept = observed.wind_speed, color = "red") +
+labs(title = "Histogram of Permutation Test", x = "Difference in Average
+Wind Speed (mph)", y = "Count")
+
+```
+
+
+
+```{r}
+
+ggplot(data = UA_flight_weather , mapping = aes(x = precip)) +
+  geom_histogram()+
+  labs(title = 'Histogram of Percipitation',x = 'Precipitation (in inches)' , y = 'Count')
+```
+
+```{r}
+ggplot(data= UA_flight_weather , aes(x = precip)) + 
+  geom_boxplot() +
+  theme_bw() +
+  labs(x = 'Departure Delay', title = 'Box plot based on precipitation',y='Precipitation')
+```
+```{r}
+
+#mean precip of UA flights for the very late group
+mean(UA_flight_weather$precip[UA_flight_weather$very_late==TRUE],na.rm=TRUE)
+
+#mean precip of UA flights for the not very late group
+mean(UA_flight_weather$precip[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+
+#calculate and store the observed difference between the mean of precip in the very late group and that in the not very late group
+observed.precip <- mean(UA_flight_weather$precip[UA_flight_weather$very_late==TRUE],na.rm=TRUE) -
+mean(UA_flight_weather$precip[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+observed.precip
+
+N <- 10^4-1
+#calculate and store the sample size, which is the number of observations in the very late group and that in the not very late group
+sample.size.precip = nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,]) 
+#find and store the sample size for the very late group
+group.1.size.precip <- nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,])
+#initialize the vector that stores the N many results
+result.temp <- numeric(N)
+#create the for loop
+for(i in 1:N)
+{
+#sample group.1.size many numbers from sample.size.distance numbers without replacement
+index.precip = sample(sample.size.precip,size=group.1.size.precip, replace = FALSE)
+#sampled indexes are taken as the indexes for very late group, and the rest are for not very late group
+#calculate and store the difference between the mean of new groups
+result.temp[i] = mean(UA_flight_weather$precip[index.precip],na.rm=TRUE) -
+mean(UA_flight_weather$precip[-index.precip],na.rm=TRUE)
+}
+#create the histogram of the means as well as a verticle line that respresent the observed mean
+ggplot(data=tibble(result.temp), mapping = aes(x=result.temp)) +
+geom_histogram(bins = 20) +
+geom_vline(xintercept = observed.precip, color = "red") +
+labs(title = "Histogram of Permutation Test", x = "Difference in Average
+Precipitation (in inches)", y = "Count")
+
+```
+```{r}
+ggplot(data = UA_flight_weather , mapping = aes(x = visib)) +
+  geom_histogram()+
+  labs(title = 'Histogram of Visibility',x = 'Visibility in Miles' , y = 'Count')
+
+```
+
+
+
+
+
+
+```{r}
+
+#print out the mean visibility of UA flights for the very late group
+mean(UA_flight_weather$visib[UA_flight_weather$very_late==TRUE],na.rm=TRUE)
+
+#print out the mean visibility of UA flights for the not very late group
+mean(UA_flight_weather$visib[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+
+#calculate and store the observed difference between the mean of visibility in the very late group and that in the not very late group
+observed.visib <- mean(UA_flight_weather$visib[UA_flight_weather$very_late==TRUE],na.rm=TRUE) -
+mean(UA_flight_weather$visib[UA_flight_weather$very_late==FALSE],na.rm=TRUE)
+observed.visib
+
+
+N <- 10^4-1
+#calculate and store the sample size, which is the number of observations in the very late group and that in the not very late group
+sample.size.temp = nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,]) +
+nrow(UA_flight_weather[UA_flight_weather$very_late==FALSE,])
+#find and store the sample size for the very late group
+group.1.size.temp <- nrow(UA_flight_weather[UA_flight_weather$very_late==TRUE,])
+#initialize the vector that stores the N many results
+result.temp <- numeric(N)
+#create the for loop
+for(i in 1:N)
+{
+#sample group.1.size many numbers from sample.size.distance numbers without replacement
+index.temp = sample(sample.size.temp,size=group.1.size.temp, replace = FALSE)
+#sampled indexes are taken as the indexes for very late group, and the rest are for not very late group
+#calculate and store the difference between the mean of new groups
+result.temp[i] = mean(UA_flight_weather$visib[index.temp],na.rm=TRUE) -
+mean(UA_flight_weather$visib[-index],na.rm=TRUE)
+}
+#create the histogram of the means as well as a verticle line that respresent the observed mean
+ggplot(data=tibble(result.temp), mapping = aes(x=result.temp)) +
+geom_histogram(bins = 20) +
+geom_vline(xintercept = observed.visib, color = "red") +
+labs(title = "Histogram of Permutation Test", x = "Difference in Average of Mean
+Visibility (in miles)", y = "Count")
+
+```
+
+
+
+
+
+
+
+
+
