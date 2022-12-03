@@ -1,0 +1,1298 @@
+---
+title: "Milestone2"
+author: "Akanksha Sharma"
+date: "2022-11-19"
+output: html_document
+---
+# Import librarires
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(nycflights13)
+library(ggpubr)
+library(lubridate)
+library(kableExtra)
+library(Hmisc)
+library(cowplot)
+
+
+```
+Let's try to understand more about the data:<BR>
+
+Filter out the data based on the United Airlines carrier<BR>
+```{r}
+UA_flight = flights %>% 
+  filter(carrier == 'UA')
+```
+We are going to use UA_flight data for further analysis of this project. <BR>
+How many rows are there for the United Airlines ?<BR>
+```{r}
+print(paste('Size of dataset for the United Airlines', nrow(UA_flight)))
+```
+What are the type of variables?<BR>
+```{r}
+glimpse(UA_flight)
+```
+```{r}
+cat('Number of flights for which the departure delay is missing' , sum(is.na(UA_flight$dep_delay)),'\n')
+cat('Percentage of missing data for departure delays for the UA carrier' ,sum((is.na(UA_flight$dep_delay))/nrow(UA_flight))*100,'\n')
+perct <- c(sum(is.na(UA_flight$dep_delay)),sum((is.na(UA_flight$dep_delay))/nrow(UA_flight))*100)
+perct
+tab <- matrix(c(sum(is.na(UA_flight$dep_delay)),sum((is.na(UA_flight$dep_delay))/nrow(UA_flight))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+
+```
+```{r}
+cat('Number of flights for which the arrival delay is missing' , sum(is.na(UA_flight$arr_delay)),'\n')
+cat('Percentage of missing data for arrival delay for the UA carrier' ,sum((is.na(UA_flight$arr_delay))/nrow(UA_flight))*100,'\n')
+perct <- c(sum(is.na(UA_flight$arr_delay)),sum((is.na(UA_flight$arr_delay))/nrow(UA_flight))*100)
+perct
+tab <- matrix(c(sum(is.na(UA_flight$arr_delay)),sum((is.na(UA_flight$arr_delay))/nrow(UA_flight))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+
+```
+
+
+```{r}
+cat('Number of flights for which the air  time is missing' , sum(is.na(UA_flight$air_time)),'\n')
+cat('Percentage of missing data for air time for the UA carrier' ,sum((is.na(UA_flight$air_time))/nrow(UA_flight))*100,'\n')
+perct <- c(sum(is.na(UA_flight$air_time)),sum((is.na(UA_flight$dep_delay))/nrow(UA_flight))*100)
+perct
+tab <- matrix(c(sum(is.na(UA_flight$air_time)),sum((is.na(UA_flight$air_time))/nrow(UA_flight))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+
+```
+
+```{r}
+cat('Number of flights for which the distance is missing' , sum(is.na(UA_flight$distance)),'\n')
+cat('Percentage of missing data for distance for the UA carrier' ,sum((is.na(UA_flight$distance))/nrow(UA_flight))*100,'\n')
+perct <- c(sum(is.na(UA_flight$distance)),sum((is.na(UA_flight$distance))/nrow(UA_flight))*100)
+perct
+tab <- matrix(c(sum(is.na(UA_flight$distance)),sum((is.na(UA_flight$distance))/nrow(UA_flight))*100), ncol=2, byrow=TRUE)
+colnames(tab) <- c('Null values in dataset','Percentage of null values')
+
+kable(tab) %>%
+  kable_styling()
+
+```
+
+
+
+```{r}
+# Impute missing values with mean in departure delay column 
+UA_flight$dep_delay <- with(UA_flight, impute(dep_delay, mean))
+UA_flight$arr_delay <- with(UA_flight, impute(arr_delay, mean))
+UA_flight$air_time <-  with(UA_flight, impute(air_time, mean))
+
+```
+
+
+
+
+
+
+## Add Late, Very_late and gain variable in the dataset<BR>
+
+```{r}
+#Add late and Very Late columns in the dataset
+UA_flight <- UA_flight %>%
+  mutate(late = case_when(dep_delay > 0 ~ TRUE,
+                          dep_delay <=0 ~ FALSE ),
+         very_late = case_when(dep_delay > 30 ~ TRUE,
+                          dep_delay <= 30 ~ FALSE ),
+         gain = arr_delay - dep_delay)
+glimpse(UA_flight)
+```
+
+
+
+
+```{r}
+UA_flight[UA_flight$arr_delay > UA_flight$dep_delay,]
+```
+
+
+
+#Let's analyse the gain per flight for the UA carrier flight <BR>
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+summary(UA_flight$gain)
+```
+The mean gain per flight is -8.54 which means that the most of the time the flights were delayed by 8 minutes.
+
+
+
+
+```{r}
+
+#Create a bar plot
+ggplot(data = UA_flight , aes(x= dep_delay ))+
+  geom_bar(color = 'black') +
+  labs(x = "Departure delay in minutes", title = "Distribution of departure delay per Flight")
+```
+```{r}
+summary(UA_flight$dep_delay)
+```
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight , aes(x= arr_delay ))+
+  geom_bar(color = 'black') +
+  labs(x = "Arrival delay in minutes", title = "Distribution of arrival delay per Flight")
+```
+
+
+
+
+```{r}
+(summary(UA_flight$arr_delay))
+
+```
+
+
+
+
+
+
+
+
+
+1. Does the average gain differ for flights that departed late versus those that did not? What about for flights that departed more than 30 minutes late?
+
+```{r}
+ggplot(UA_flight,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain for flights which were late or on time')+
+  xlim(-80,150)
+```
+
+```{r}
+ggplot(UA_flight,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_histogram(bins = 30)+
+  xlim(-80,120)+
+
+  labs(title = 'Distribution of Gain for flights which were very late or not very time')
+```
+```{r}
+ggplot(UA_flight,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'Boxplot of Gain for flights which were very late or not very time')
+```
+
+```{r}
+ggplot(UA_flight,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'Boxplot of Gain for flights which were very late or not very time')
+```
+
+```{r}
+glimpse(UA_flight)
+```
+
+
+```{r}
+UA_flight %>%
+  group_by(late) %>%
+  dplyr::summarize(Mean_gain = mean(gain),
+                   Median_gain = median(gain),
+                   StandardDeviation_gain = sd(gain),
+                   MinGain =min(gain),
+                   MaxGain = max(gain)
+                   )
+```
+
+
+```{r}
+UA_flight %>%
+  group_by(very_late) %>%
+  dplyr::summarize(Mean_gain = mean(gain),
+                   Median_gain = median(gain),
+                   StandardDeviation_gain = sd(gain),
+                   MinGain =min(gain),
+                   MaxGain = max(gain)
+                   )
+```
+## Hypothesis Testing for Late variable
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight, alternative = "two.sided")
+```
+## Hypothesis testing for Very Late variable
+
+
+```{r}
+ggplot(UA_flight)
+```
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight, alternative = "two.sided")
+
+```
+
+
+
+
+
+
+```{r}
+z_scores <- as.data.frame(sapply(UA_flight$gain, function(df) (abs(df-(-8.548062))/(19.34348))),colnames = c('score'))
+colnames(z_scores) <- c('score')
+without_outlier <- subset(UA_flight, (z_scores$score < 3) & (z_scores$score > -3))
+
+```
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier, alternative = "two.sided")
+
+```
+Bootstrap t test to see if there's difference between the means for the flights which were late or on time. 
+```{r}
+UA_flight_late <-subset(UA_flight,gain,subset = late ==TRUE,drop=T)
+UA_flight_notlate <- subset(UA_flight,gain,subset = late ==FALSE,drop=T)
+```
+
+```{r}
+tstat <- function(x , y , mu)
+{
+  (mean(y) - mean(x) - mu)/sqrt(var(y)/length(y) + var(x)/length(x))
+  
+}
+observed <- tstat(UA_flight_late,UA_flight_notlate,0)
+thetahat <- mean(UA_flight_late) - mean(UA_flight_notlate)
+n1 <- length(UA_flight_late)
+n2 <- length(UA_flight_notlate)
+
+N <- 10^5-1
+tstar <- numeric(N)
+set.seed(5)
+for (i in 1:N)
+{
+  boot1 <- sample(UA_flight_late,n1,replace = TRUE)
+  boot2 <- sample(UA_flight_notlate,n2,replace = TRUE)
+  tstar[i] <- tstat(boot1,boot2,thetahat)
+}
+hist(tstar, xlim = c(-23,-7))
+abline(v=observed)
+cat('The p-value is :',2*(sum(tstar >= observed)+1)/(N+1))
+```
+
+
+
+
+
+
+
+
+
+```{r}
+UA_flight_verylate <-subset(UA_flight,gain,subset = very_late ==TRUE,drop=T)
+UA_flight_notverylate <- subset(UA_flight,gain,subset = very_late ==FALSE,drop=T)
+```
+
+```{r}
+tstat <- function(x , y , mu)
+{
+  (mean(y) - mean(x) - mu)/sqrt(var(y)/length(y) + var(x)/length(x))
+  
+}
+observed <- tstat(UA_flight_verylate,UA_flight_notverylate,0)
+thetahat <- mean(UA_flight_verylate) - mean(UA_flight_notverylate)
+n1 <- length(UA_flight_verylate)
+n2 <- length(UA_flight_notverylate)
+
+N <- 10^5-1
+tstar <- numeric(N)
+set.seed(5)
+for (i in 1:N)
+{
+  boot1 <- sample(UA_flight_verylate,n1,replace = TRUE)
+  boot2 <- sample(UA_flight_notverylate,n2,replace = TRUE)
+  tstar[i] <- tstat(boot1,boot2,thetahat)
+}
+hist(tstar)
+abline(v=observed)
+cat('The p-value is :',2*(sum(tstar >= observed)+1)/(N+1))
+```
+
+
+Let's do the bootstrap t-test for the very_late variable.
+
+
+What are the five most common destination airports for United Airlines flights from New York City? Describe the distribution and the average gain for each of these five airports.
+
+```{r}
+airport_freq = as.data.frame(table(UA_flight$dest))
+```
+
+```{r}
+airport_freq
+```
+
+```{r}
+ggbarplot(airport_freq, x = "Var1", y = "Freq",
+          fill = "lightgray", width = 0.8,
+          xlab = "Airport Code", ylab = "Number of flights",
+          label = TRUE, lab.pos = "out", lab.col = "black",lab.size = 3,
+          sort.val = "desc", # Sort in descending order
+          top = 20,          # select top 20 most citated genes
+          x.text.angle = 45 , # x axis text rotation angle
+          title = "Flight Count per Destination airport"
+          )
+ 
+
+```
+```{r}
+UA_flight %>%
+  filter(dest %in% c('ORD','IAH','SFO','LAX','DEN')) %>%
+  group_by(dest) %>%
+  dplyr::summarize(Mean_gain = mean(gain),
+                   Median_gain = median(gain),
+                   StandardDeviation_gain = sd(gain),
+                   MinGain =min(gain),
+                   MaxGain = max(gain)
+                   )
+```
+
+
+
+```{r}
+UA_flight %>%
+  filter(dest %in% c('ORD','IAH','SFO','LAX','DEN')) %>%
+  group_by(late,dest) %>%
+  dplyr::summarize(Mean_gain_ = mean(gain),
+                   Median_gain_ = median(gain),
+                   StandardDeviation_gain_ = sd(gain),
+                   MinGain_ =min(gain),
+                   MaxGain_ = max(gain)
+                   )
+```
+```{r}
+
+UA_flight %>%
+  filter(dest %in% c('ORD','IAH','SFO','LAX','DEN')) %>%
+  group_by(very_late,dest) %>%
+  dplyr::summarize(Mean_gain = mean(gain),
+                   Median_gain = median(gain),
+                   StandardDeviation_gain = sd(gain),
+                   MinGain =min(gain),
+                   MaxGain = max(gain)
+                   )
+```
+
+
+
+
+```{r}
+UA_flight_ORD <- UA_flight %>%
+  filter(dest == 'ORD')
+
+```
+
+
+## analysis for ORD
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_ORD , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes ORD", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+h1 = ggplot(UA_flight_ORD,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'ORD : Distribution of Gain / Late')+
+  xlim(-80,150)
+h2 = ggplot(UA_flight_ORD,aes(gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'ORD : Distribution of Gain /Very Late')+
+  xlim(-80,150)
+plot_grid(h1, h2, labels="AUTO")
+```
+
+
+
+
+```{r}
+
+h1 = ggplot(UA_flight_ORD,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'ORD : Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight_ORD,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'ORD : Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+ORD Hypothesis Testing for Late variable 
+
+H0 : Average gain for late and flight on time is same for ORD destination
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same for ORD destination 
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight_ORD, alternative = "two.sided")
+```
+
+ORD Hypothesis testing for Very Late variable 
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight_ORD, alternative = "two.sided")
+
+```
+
+```{r}
+without_outlier_ORD <- without_outlier %>%
+  filter(dest =='ORD')
+```
+
+
+
+
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier_ORD, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable Without Outlier
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier_ORD, alternative = "two.sided")
+
+```
+
+## Analysis for IAH Airport 
+```{r}
+UA_flight_IAH <- UA_flight %>%
+  filter(dest == 'IAH')
+
+```
+
+
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_IAH , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes IAH", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+h1 = ggplot(UA_flight_IAH,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'IAH : Distribution of Gain / Late')+
+  xlim(-80,150)
+h2 = ggplot(UA_flight_IAH,aes(gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'IAH : Distribution of Gain /Very Late')+
+  xlim(-80,150)
+plot_grid(h1, h2, labels="AUTO")
+```
+
+
+
+
+```{r}
+
+h1 = ggplot(UA_flight_IAH,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'IAH : Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight_IAH,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'IAH : Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+IAH Hypothesis Testing for Late variable 
+
+H0 : Average gain for late and flight on time is same for IAH destination
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same for IAH destination 
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight_IAH, alternative = "two.sided")
+```
+
+IAH Hypothesis testing for Very Late variable 
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight_IAH, alternative = "two.sided")
+
+```
+
+```{r}
+without_outlier_IAH <- without_outlier %>%
+  filter(dest =='IAH')
+```
+
+
+
+
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier_IAH, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable Without Outlier
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier_IAH, alternative = "two.sided")
+```
+
+
+## Analysis for IAH Airport 
+```{r}
+UA_flight_SFO <- UA_flight %>%
+  filter(dest == 'SFO')
+
+```
+
+
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_SFO , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes SFO", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+h1 = ggplot(UA_flight_SFO,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'SFO : Distribution of Gain / Late')+
+  xlim(-80,150)
+h2 = ggplot(UA_flight_SFO,aes(gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'SFO : Distribution of Gain /Very Late')+
+  xlim(-80,150)
+plot_grid(h1, h2, labels="AUTO")
+```
+
+
+
+
+```{r}
+
+h1 = ggplot(UA_flight_SFO,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'SFO : Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight_SFO,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'SFO : Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+SFO Hypothesis Testing for Late variable 
+
+H0 : Average gain for late and flight on time is same for IAH destination
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same for IAH destination 
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight_SFO, alternative = "two.sided")
+```
+
+SFO Hypothesis testing for Very Late variable 
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight_SFO, alternative = "two.sided")
+
+```
+
+```{r}
+without_outlier_SFO <- without_outlier %>%
+  filter(dest =='SFO')
+```
+
+
+
+
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier_SFO, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable Without Outlier
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier_SFO, alternative = "two.sided")
+```
+
+## Analysis for LAX Airport 
+```{r}
+UA_flight_LAX <- UA_flight %>%
+  filter(dest == 'LAX')
+
+```
+
+
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_LAX , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes LAX", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+h1 = ggplot(UA_flight_LAX,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'LAX : Distribution of Gain / Late')+
+  xlim(-80,150)
+h2 = ggplot(UA_flight_LAX,aes(gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'LAX : Distribution of Gain /Very Late')+
+  xlim(-80,150)
+plot_grid(h1, h2, labels="AUTO")
+```
+
+
+
+
+```{r}
+
+h1 = ggplot(UA_flight_LAX,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'LAX : Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight_LAX,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'LAX : Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+LAX Hypothesis Testing for Late variable 
+
+H0 : Average gain for late and flight on time is same for LAX destination
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same for LAX destination 
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight_LAX, alternative = "two.sided")
+```
+
+LAX Hypothesis testing for Very Late variable 
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight_LAX, alternative = "two.sided")
+
+```
+
+```{r}
+without_outlier_LAX <- without_outlier %>%
+  filter(dest =='LAX')
+```
+
+
+
+
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier_LAX, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable Without Outlier
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier_LAX, alternative = "two.sided")
+```
+
+
+## Analysis for DEN Airport 
+```{r}
+UA_flight_DEN <- UA_flight %>%
+  filter(dest == 'DEN')
+
+```
+
+
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight_DEN , aes(x= gain ))+
+  geom_bar(color = 'black') +
+  labs(x = "Gain per flight in minutes DEN", title = "Distribution of Gain per Flight")
+```
+
+```{r}
+h1 = ggplot(UA_flight_DEN,aes(gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'DEN : Distribution of Gain / Late')+
+  xlim(-80,150)
+h2 = ggplot(UA_flight_DEN,aes(gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'DEN : Distribution of Gain /Very Late')+
+  xlim(-80,150)
+plot_grid(h1, h2, labels="AUTO")
+```
+
+
+
+
+```{r}
+
+h1 = ggplot(UA_flight_DEN,aes(gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'IAH : Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight_DEN,aes(gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'DEN : Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+IAH Hypothesis Testing for Late variable 
+
+H0 : Average gain for late and flight on time is same for DEN destination
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same for DEN destination 
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=UA_flight_DEN, alternative = "two.sided")
+```
+
+IAH Hypothesis testing for Very Late variable 
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=UA_flight_DEN, alternative = "two.sided")
+
+```
+
+```{r}
+without_outlier_DEN <- without_outlier %>%
+  filter(dest =='DEN')
+```
+
+
+
+
+
+
+
+## Hypothesis Testing for Late variable Without Outlier
+
+H0 : Average gain for late and flight on time is same
+     average(gain for late) = average(gain for flight on time)
+Ha : Average gain for late and flights on time is not same
+     average(gain for late) != average(gain for flight on time)
+  
+```{r}
+t.test(gain~late,data=without_outlier_DEN, alternative = "two.sided")
+```
+
+
+
+
+## Hypothesis testing for Very Late variable Without Outlier
+
+
+H0 : Average gain for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Average gain for very late and flight which were having delay less than 30 minutes is different
+     average(gain for very late flights) != average(gain for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(gain~very_late,data=without_outlier_DEN, alternative = "two.sided")
+```
+
+
+#Another common measure of interest, in addition to total gain, is the gain relative to the duration of the flight. Calculate the gain per hour by dividing the total gain by the duration in hours of each flight. Does the average gain per hour differ for flights that departed late versus those that did not? What about for flights that departed more than 30 minutes late?
+
+
+```{r}
+UA_flight <- UA_flight %>%
+  mutate(rel_gain = UA_flight$gain/UA_flight$air_time)
+glimpse(UA_flight)
+
+```
+
+```{r}
+#Create a bar plot
+ggplot(data = UA_flight , aes(x= rel_gain ))+
+  geom_histogram(color = 'black') +
+  labs(x = "Average Gain per hour", title = "Distribution of Relative Gain per Flight")
+```
+
+
+
+```{r}
+h1 = ggplot(UA_flight,aes(rel_gain,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain / Late')
+h2 = ggplot(UA_flight,aes(rel_gain,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain /Very Late')
+plot_grid(h1, h2, labels="AUTO")
+```
+```{r}
+
+h1 = ggplot(UA_flight,aes(rel_gain,fill = late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'Boxplot of Gain / Late')
+
+h2 = ggplot(UA_flight,aes(rel_gain,fill = very_late))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'Boxplot of Gain / Very Late')
+plot_grid(h1, h2, labels="AUTO")
+
+```
+```{r}
+UA_flight %>%
+  group_by(late) %>%
+  dplyr::summarize(Mean_gain_ = mean(rel_gain),
+                   Median_gain_ = median(rel_gain),
+                   StandardDeviation_gain_ = sd(rel_gain),
+                   MinGain_ =min(rel_gain),
+                   MaxGain_ = max(rel_gain)
+                   )
+```
+
+
+```{r}
+UA_flight %>%
+  group_by(very_late) %>%
+  dplyr::summarize(Mean_gain_ = mean(rel_gain),
+                   Median_gain_ = median(rel_gain),
+                   StandardDeviation_gain_ = sd(rel_gain),
+                   MinGain_ =min(rel_gain),
+                   MaxGain_ = max(rel_gain)
+                   )
+```
+
+
+## Hypothesis Testing for Late variable
+
+H0 : Mean of average gain per hour for late and flight on time is same
+     Mean(average gain per hour for late) = average(average gain per hour for flight on time)
+Ha : Average gain for late and flights on time is not same
+     Mean(average gain per hour for late) != average(average gain per hour for flight on time)
+  
+```{r}
+t.test(rel_gain~late,data=UA_flight, alternative = "two.sided")
+```
+
+
+## Hypothesis testing for Very Late variable 
+
+
+H0 : Mean of average gain per hour for very late and flight which were having delay less than 30 minutes is same
+     average(gain for very late flights) = average(gain for flight where delays is less than 30 mintues)
+Ha : Mean of average gain per hour  for very late and flight which were having delay less than 30 minutes is different
+     average(average gain per hour  for very late flights) != average(verage gain per hour for flight where delays is less than 30 mintues)
+  
+```{r}
+t.test(rel_gain~very_late,data=UA_flight, alternative = "two.sided")
+```
+```{r}
+UA_flight_rellate <-subset(UA_flight,rel_gain,subset = late ==TRUE,drop=T)
+UA_flight_relnotlate <- subset(UA_flight,rel_gain,subset = late ==FALSE,drop=T)
+
+tstat <- function(x , y , mu)
+{
+  (mean(y) - mean(x) - mu)/sqrt(var(y)/length(y) + var(x)/length(x))
+  
+}
+observed <- tstat(UA_flight_rellate,UA_flight_relnotlate,0)
+observed
+thetahat <- mean(UA_flight_rellate) - mean(UA_flight_relnotlate)
+n1 <- length(UA_flight_rellate)
+n2 <- length(UA_flight_relnotlate)
+
+N <- 10^5-1
+tstar <- numeric(N)
+set.seed(5)
+for (i in 1:N)
+{
+  boot1 <- sample(UA_flight_rellate,n1,replace = TRUE)
+  boot2 <- sample(UA_flight_relnotlate,n2,replace = TRUE)
+  tstar[i] <- tstat(boot1,boot2,thetahat)
+}
+hist(tstar,xlim = c(-26,-9))
+abline(v=observed)
+cat('The p-value is :',2*(sum(tstar >= observed)+1)/(N+1))
+```
+
+```{r}
+UA_flight_relverylate <-subset(UA_flight,rel_gain,subset = very_late ==TRUE,drop=T)
+UA_flight_relnotverylate <- subset(UA_flight,rel_gain,subset = very_late ==FALSE,drop=T)
+
+tstat <- function(x , y , mu)
+{
+  (mean(y) - mean(x) - mu)/sqrt(var(y)/length(y) + var(x)/length(x))
+  
+}
+observed <- tstat(UA_flight_relverylate,UA_flight_relnotverylate,0)
+observed
+thetahat <- mean(UA_flight_relverylate) - mean(UA_flight_relnotverylate)
+n1 <- length(UA_flight_rellate)
+n2 <- length(UA_flight_relnotverylate)
+
+N <- 10^5-1
+tstar <- numeric(N)
+set.seed(5)
+for (i in 1:N)
+{
+  boot1 <- sample(UA_flight_relverylate,n1,replace = TRUE)
+  boot2 <- sample(UA_flight_relnotverylate,n2,replace = TRUE)
+  tstar[i] <- tstat(boot1,boot2,thetahat)
+}
+hist(tstar,xlim = c(-14,-3))
+abline(v=observed)
+cat('The p-value is :',2*(sum(tstar >= observed)+1)/(N+1))
+```
+
+
+
+## Does the average gain per hour differ for longer flights versus shorter flights?
+
+
+
+```{r}
+ggplot(data = UA_flight , aes(x= distance))+
+  geom_histogram(color = 'black') +
+  labs(x = "Average Gain per hour", title = "Distribution of Gain per Flight")
+
+```
+```{r}
+UA_flight <- UA_flight %>%
+  mutate(flight_short_distance = case_when(distance < 1800 ~ TRUE,
+                          distance >=1800 ~ FALSE ))
+glimpse(UA_flight)
+```
+```{r}
+ggplot(data = UA_flight , aes(x= flight_short_distance))+
+  geom_bar(color = 'green') +
+  ggtitle('Flight is short or long based on distance')
+```
+
+```{r}
+table(UA_flight$flight_short_distance)
+```
+
+
+```{r}
+ggplot(UA_flight,aes(rel_gain,fill = flight_short_distance))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain per hour / Flight Duration')
+```
+```{r}
+ggplot(UA_flight,aes(rel_gain,fill = flight_short_distance))+
+  scale_shape_discrete(name  ="Payer")+
+  geom_boxplot(bins = 30)+
+  labs(title = 'Boxplot of flight duration (short/long) with average gain per hour')
+```
+
+
+```{r}
+UA_flight %>%
+  group_by(flight_short_distance) %>%
+  dplyr::summarize(Mean_gain = mean(rel_gain),
+                   Median_gain = median(rel_gain),
+                   StandardDeviation_gain = sd(rel_gain),
+                   MinGain =min(rel_gain),
+                   MaxGain = max(rel_gain)
+                   )
+```
+
+
+
+
+
+
+```{r}
+t.test(rel_gain~flight_short_distance,data=UA_flight, alternative = "two.sided")
+```
+
+```{r}
+glimpse(without_outlier)
+```
+```{r}
+without_outlier <- without_outlier %>%
+  mutate(flight_short_distance = case_when(distance < 1800 ~ TRUE,
+                          distance >=1800 ~ FALSE ),
+         flight_short = case_when(air_time < 200 ~ TRUE,
+                          air_time >=200 ~ FALSE ),
+         rel_gain = without_outlier$gain/without_outlier$air_time
+         )
+```
+
+
+```{r}
+t.test(rel_gain~flight_short_distance,data=without_outlier, alternative = "two.sided")
+
+```
+
+
+
+
+
+### bootstrap t test for the distance and relative gain
+
+
+```{r}
+UA_flight_short <-subset(UA_flight,rel_gain,subset = flight_short_distance ==TRUE,drop=T)
+UA_flight_notshort <- subset(UA_flight,rel_gain,subset = flight_short_distance ==FALSE,drop=T)
+
+tstat <- function(x , y , mu)
+{
+  (mean(y) - mean(x) - mu)/sqrt(var(y)/length(y) + var(x)/length(x))
+  
+}
+observed <- tstat(UA_flight_short,UA_flight_notshort,0)
+observed
+thetahat <- mean(UA_flight_short) - mean(UA_flight_notshort)
+n1 <- length(UA_flight_short)
+n2 <- length(UA_flight_notshort)
+
+N <- 10^5-1
+tstar <- numeric(N)
+set.seed(5)
+for (i in 1:N)
+{
+  boot1 <- sample(UA_flight_short,n1,replace = TRUE)
+  boot2 <- sample(UA_flight_notshort,n2,replace = TRUE)
+  tstar[i] <- tstat(boot1,boot2,thetahat)
+}
+hist(tstar,xlim = c(42,94))
+abline(v=observed)
+cat('The p-value is :',2*(sum(tstar >= observed)+1)/(N+1))
+```
+
+
+
+
